@@ -1,0 +1,15 @@
+[package]
+name = "gregory"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "gregory"
+path = "src/lib.rs"
+
+[[bin]]
+name = "test_wav"
+path = "src/bin/test_wav.rs"
+
+[dependencies]
+hound = "3.5"
