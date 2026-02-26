@@ -125,7 +125,7 @@ impl Filter {
         let fc_norm = cutoff / self.sample_rate;
 
         // Equivalent to a first-order bilinear prewarping.
-        self.f = fc_norm * 1.873_f64; // empirically tuned
+        self.f = fc_norm * 1.873; // empirically tuned
         self.f = self.f.min(0.9999); // prevent instability near Nyquist
 
         self.fc = 1.0 - self.f;

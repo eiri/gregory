@@ -32,6 +32,11 @@ impl Oscillator {
         self.phase_increment = frequency / self.sample_rate;
     }
 
+    /// Reset phase to zero for hard retrigger.
+    pub fn reset_phase(&mut self) {
+        self.phase = 0.0;
+    }
+
     /// Produce the next sample and advance the phase.
     pub fn next_sample(&mut self) -> f64 {
         let sample = match self.waveform {

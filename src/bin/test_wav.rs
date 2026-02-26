@@ -83,8 +83,8 @@ fn main() {
         // Filter envelope: fast attack, slower decay, low sustain → pluck shape.
         let mut flt_env = Envelope::new(0.005, 0.25, 0.1, 0.4, sample_rate);
 
-        let base_cutoff = 300.0_f64;
-        let cutoff_range = 4000.0_f64; // filter opens by this much at peak
+        let base_cutoff = 300.0;
+        let cutoff_range = 4000.0; // filter opens by this much at peak
 
         for i in 0..total {
             let t = i as f64 / sample_rate;
