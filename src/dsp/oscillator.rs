@@ -8,10 +8,10 @@ pub enum Waveform {
 pub struct Oscillator {
     pub waveform: Waveform,
     pub frequency: f64,
+    pub pulse_width: f64, // Pulse width for square wave, 0.0–1.0. 0.5 = 50% duty cycle.
     sample_rate: f64,
     phase: f64,
     phase_increment: f64,
-    pub pulse_width: f64, // Pulse width for square wave, 0.0–1.0. 0.5 = 50% duty cycle.
 }
 
 impl Oscillator {
@@ -71,12 +71,15 @@ impl Oscillator {
 }
 
 fn poly_blep(t: f64, dt: f64) -> f64 {
-    // Polynomial: 2t - t² - 1
     if t < dt {
+        // Just past the discontinuity (rising side).
         let t = t / dt;
+        // Polynomial: 2t - t^2 - 1  (integrated step function)
         2.0 * t - t * t - 1.0
     } else if t > 1.0 - dt {
+        // Just before the discontinuity (falling side).
         let t = (t - 1.0) / dt;
+        // Polynomial: t^2 + 2t + 1
         t * t + 2.0 * t + 1.0
     } else {
         0.0
