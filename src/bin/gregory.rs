@@ -140,6 +140,7 @@ where
                         eng.note_off(note);
                     }
                     NoteEvent::PitchBend { semitones } => eng.pitch_bend(semitones),
+                    NoteEvent::ModWheel { value } => eng.set_mod_wheel(value),
                 }
             }
 

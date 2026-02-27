@@ -11,6 +11,7 @@ pub enum NoteEvent {
     NoteOn { note: u8, velocity: u8 },
     NoteOff { note: u8 },
     PitchBend { semitones: f64 },
+    ModWheel { value: f64 },
 }
 
 pub struct MidiInputHandle {
@@ -102,6 +103,16 @@ fn parse_and_push(raw: &[u8], prod: &mut HeapProd<NoteEvent>) {
             let normalized = (raw - 8192.0) / 8192.0;
             let semitones = normalized * 2.0; // +/- 2 semitone
             NoteEvent::PitchBend { semitones }
+        }
+        MidiMessage::ControlChange(_ch, control, value) => {
+            use wmidi::ControlFunction;
+            if control == ControlFunction::MODULATION_WHEEL {
+                NoteEvent::ModWheel {
+                    value: u8::from(value) as f64 / 127.0,
+                }
+            } else {
+                return;
+            }
         }
         // Ignore all other messages for now (CC, etc.).
         _ => return,

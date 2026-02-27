@@ -31,6 +31,8 @@ pub struct Patch {
     pub flt_release: f64,
     /// How far the filter envelope opens the cutoff above the base, in Hz.
     pub flt_env_amount: f64,
+    /// How far the mod wheel can open the filter above the envelope peak, in Hz.
+    pub mod_wheel_cutoff_amount: f64,
 
     /// Master output gain, 0.0–1.0.
     pub gain: f64,
@@ -53,6 +55,7 @@ impl Default for Patch {
             flt_sustain: 0.1,
             flt_release: 0.3,
             flt_env_amount: 4000.0,
+            mod_wheel_cutoff_amount: 3000.0,
             gain: 0.5,
         }
     }
@@ -76,6 +79,7 @@ pub struct Engine {
     /// The MIDI note currently sounding, if any.
     current_note: Option<u8>,
     pitch_bend_semitones: f64,
+    mod_wheel: f64,
 }
 
 impl Engine {
@@ -113,6 +117,7 @@ impl Engine {
             sample_rate,
             current_note: None,
             pitch_bend_semitones: 0.0,
+            mod_wheel: 0.0,
         }
     }
 
@@ -139,6 +144,10 @@ impl Engine {
 
     pub fn pitch_bend(&mut self, semitones: f64) {
         self.pitch_bend_semitones = semitones;
+    }
+
+    pub fn set_mod_wheel(&mut self, value: f64) {
+        self.mod_wheel = value.clamp(0.0, 1.0);
     }
 
     /// Hard-reset oscillator phase to zero. Call before `note_on` for a staccato.
@@ -190,8 +199,11 @@ impl Engine {
         let amp = self.amp_env.next_sample();
         let flt = self.flt_env.next_sample();
 
+        // Filter cutoff = base + filter envelope amount + mod wheel amount.
+        // Mod wheel sweeps an additional octave above the envelope peak.
+        let mod_cutoff = self.mod_wheel * self.patch.mod_wheel_cutoff_amount;
         // Modulate filter cutoff: base + envelope amount scaled by flt envelope.
-        let cutoff = (self.patch.filter_cutoff + flt * self.patch.flt_env_amount)
+        let cutoff = (self.patch.filter_cutoff + flt * self.patch.flt_env_amount + mod_cutoff)
             .clamp(10.0, self.sample_rate * 0.49);
         self.filter.set_cutoff(cutoff);
 
