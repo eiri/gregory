@@ -75,6 +75,7 @@ pub struct Engine {
 
     /// The MIDI note currently sounding, if any.
     current_note: Option<u8>,
+    pitch_bend_semitones: f64,
 }
 
 impl Engine {
@@ -111,6 +112,7 @@ impl Engine {
             flt_env,
             sample_rate,
             current_note: None,
+            pitch_bend_semitones: 0.0,
         }
     }
 
@@ -118,6 +120,8 @@ impl Engine {
     pub fn note_on(&mut self, note: u8, _velocity: u8) {
         self.current_note = Some(note);
         self.osc.set_frequency(midi_note_to_freq(note));
+        // Maybe remove this later to allow new note to be pitched
+        self.pitch_bend_semitones = 0.0;
         self.amp_env.gate_on();
         self.flt_env.gate_on();
     }
@@ -131,6 +135,10 @@ impl Engine {
             self.amp_env.gate_off();
             self.flt_env.gate_off();
         }
+    }
+
+    pub fn pitch_bend(&mut self, semitones: f64) {
+        self.pitch_bend_semitones = semitones;
     }
 
     /// Hard-reset oscillator phase to zero. Call before `note_on` for a staccato.
@@ -172,6 +180,13 @@ impl Engine {
     ///
     /// Signal flow: oscillator -> filter (cutoff modulated by flt_env) -> * amp_env -> * gain
     pub fn process(&mut self) -> f64 {
+        // Apply pitch bend — recompute frequency from base note + bend offset.
+        if let Some(note) = self.current_note {
+            let bent_freq =
+                midi_note_to_freq(note) * 2.0_f64.powf(self.pitch_bend_semitones / 12.0);
+            self.osc.set_frequency(bent_freq);
+        }
+
         let amp = self.amp_env.next_sample();
         let flt = self.flt_env.next_sample();
 

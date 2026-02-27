@@ -10,6 +10,7 @@ use wmidi::MidiMessage;
 pub enum NoteEvent {
     NoteOn { note: u8, velocity: u8 },
     NoteOff { note: u8 },
+    PitchBend { semitones: f64 },
 }
 
 pub struct MidiInputHandle {
@@ -95,7 +96,14 @@ fn parse_and_push(raw: &[u8], prod: &mut HeapProd<NoteEvent>) {
         MidiMessage::NoteOff(_ch, note, _vel) => NoteEvent::NoteOff {
             note: u8::from(note),
         },
-        // Ignore all other messages for now (CC, pitch bend, etc.).
+        MidiMessage::PitchBendChange(_ch, bend) => {
+            // wmidi PitchBend is a 14-bit value, center = 8192, range 0–16383.
+            let raw = u16::from(bend) as f64;
+            let normalized = (raw - 8192.0) / 8192.0;
+            let semitones = normalized * 2.0; // +/- 2 semitone
+            NoteEvent::PitchBend { semitones }
+        }
+        // Ignore all other messages for now (CC, etc.).
         _ => return,
     };
 

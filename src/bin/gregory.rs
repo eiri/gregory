@@ -139,6 +139,7 @@ where
                     NoteEvent::NoteOff { note } => {
                         eng.note_off(note);
                     }
+                    NoteEvent::PitchBend { semitones } => eng.pitch_bend(semitones),
                 }
             }
 
