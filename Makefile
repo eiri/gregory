@@ -5,7 +5,7 @@ all: run
 
 .PHONY: run
 run:
-	cargo run --bin test_wav
+	cargo run --bin gregory
 
 .PHONY: check
 check:

@@ -8,8 +8,8 @@ name = "gregory"
 path = "src/lib.rs"
 
 [[bin]]
-name = "test_wav"
-path = "src/bin/test_wav.rs"
+name = "gregory"
+path = "src/bin/gregory.rs"
 
 [dependencies]
-hound = "3.5"
+cpal = "0.17"
