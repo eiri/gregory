@@ -1,7 +1,9 @@
-use gregory::dsp::{Envelope, Filter, FilterMode, Oscillator, Waveform};
+use gregory::dsp::{Engine, Patch};
+use gregory::dsp::{FilterMode, Waveform};
 use hound::{SampleFormat, WavSpec, WavWriter};
 
 const SAMPLE_RATE: u32 = 44_100;
+const SR: f64 = SAMPLE_RATE as f64;
 
 fn make_spec() -> WavSpec {
     WavSpec {
@@ -17,103 +19,102 @@ fn to_pcm(s: f64) -> i16 {
 }
 
 fn main() {
-    let sample_rate = SAMPLE_RATE as f64;
-    let duration_secs = 1.0;
-    let frequency = 110.0; // A2
-    let filter_from = 80.0;
-    let filter_to = 8000.0;
-    let resonance = 0.6;
-    let amplitude = 0.5;
-    let total_samples = (sample_rate * duration_secs) as usize;
-
     // Dry sawtooth
     {
+        let mut engine = Engine::new(SR);
+        engine.set_patch(Patch {
+            waveform: Waveform::Sawtooth,
+            filter_cutoff: 20000.0,
+            filter_resonance: 0.0,
+            flt_env_amount: 0.0,
+            amp_attack: 0.0,
+            amp_decay: 0.0,
+            amp_sustain: 1.0,
+            amp_release: 0.0,
+            gain: 0.5,
+            ..Patch::default()
+        });
+
         let mut writer = WavWriter::create("gregory_saw_raw.wav", make_spec()).unwrap();
-        let mut osc = Oscillator::new(Waveform::Sawtooth, frequency, sample_rate);
-
-        for _ in 0..total_samples {
-            let sample = osc.next_sample() * amplitude;
-            writer.write_sample(to_pcm(sample)).unwrap();
+        engine.note_on(45, 100); // A2
+        for _ in 0..(SR * 1.0) as usize {
+            writer.write_sample(to_pcm(engine.process())).unwrap();
         }
-
         writer.finalize().unwrap();
         println!("Wrote gregory_saw_raw.wav");
     }
 
     // Filtered sawtooth — cutoff sweeps 80 Hz to 8 kHz and back
     {
+        let total = (SR * 2.0) as usize;
+        let mut engine = Engine::new(SR);
+        engine.set_patch(Patch {
+            waveform: Waveform::Sawtooth,
+            filter_resonance: 0.6,
+            flt_env_amount: 0.0,
+            amp_attack: 0.0,
+            amp_decay: 0.0,
+            amp_sustain: 1.0,
+            amp_release: 0.0,
+            gain: 0.5,
+            ..Patch::default()
+        });
+
         let mut writer = WavWriter::create("gregory_saw_filtered.wav", make_spec()).unwrap();
-        let mut osc = Oscillator::new(Waveform::Sawtooth, frequency, sample_rate);
-        let mut filter = Filter::new(filter_from, resonance, sample_rate);
-        filter.mode = FilterMode::LowPass;
-
-        for i in 0..total_samples {
-            // Slow sinusoidal sweep of cutoff: 80 Hz to 8000 Hz and back.
-            let t = i as f64 / total_samples as f64;
-            let sweep = (std::f64::consts::PI * t).sin();
-            let cutoff = filter_from + sweep * (filter_to - filter_from);
-            filter.set_cutoff(cutoff);
-
-            let raw = osc.next_sample();
-            let filtered = filter.process(raw) * amplitude;
-            writer.write_sample(to_pcm(filtered)).unwrap();
+        engine.note_on(45, 100); // A2
+        for i in 0..total {
+            let t = i as f64 / total as f64; // 0.0 → 1.0
+            let sweep = (std::f64::consts::PI * t).sin(); // 0 → 1 → 0
+            let cutoff = 80.0 + sweep * (8000.0 - 80.0);
+            engine.patch.filter_cutoff = cutoff;
+            writer.write_sample(to_pcm(engine.process())).unwrap();
         }
-
         writer.finalize().unwrap();
         println!("Wrote gregory_saw_filtered.wav");
     }
 
     // Three notes — oscillator + filter + envelope
     {
-        // Notes: (frequency_hz, note_on_sec, note_off_sec)
-        let notes: &[(f64, f64, f64)] = &[
-            (110.0, 0.1, 0.9), // A2
-            (146.8, 1.1, 1.9), // D3
-            (164.8, 2.1, 3.5), // E3 — held longer
+        let notes: &[(u8, f64, f64)] = &[
+            (45, 0.1, 0.9), // A2
+            (50, 1.1, 1.9), // D3
+            (52, 2.1, 3.0), // E3 — held longer
         ];
-        let total_secs = 4.5;
-        let total = (sample_rate * total_secs) as usize;
+        let total = (SR * 4.0) as usize;
+
+        let mut engine = Engine::new(SR);
+        engine.set_patch(Patch {
+            waveform: Waveform::Sawtooth,
+            filter_mode: FilterMode::LowPass,
+            filter_cutoff: 300.0,
+            filter_resonance: 0.5,
+            flt_env_amount: 4000.0,
+            flt_attack: 0.005,
+            flt_decay: 0.25,
+            flt_sustain: 0.1,
+            flt_release: 0.4,
+            amp_attack: 0.005,
+            amp_decay: 0.15,
+            amp_sustain: 0.6,
+            amp_release: 0.4,
+            gain: 0.5,
+            ..Patch::default()
+        });
 
         let mut writer = WavWriter::create("gregory_adsr.wav", make_spec()).unwrap();
-        let mut osc = Oscillator::new(Waveform::Sawtooth, frequency, sample_rate);
-        let mut filter = Filter::new(filter_from, resonance, sample_rate);
-
-        // Amplitude envelope: snappy attack, medium decay, full sustain.
-        let mut amp_env = Envelope::new(0.005, 0.15, 0.6, 0.4, sample_rate);
-        // Filter envelope: fast attack, slower decay, low sustain → pluck shape.
-        let mut flt_env = Envelope::new(0.005, 0.25, 0.1, 0.4, sample_rate);
-
-        let base_cutoff = 300.0;
-        let cutoff_range = 4000.0; // filter opens by this much at peak
-
         for i in 0..total {
-            let t = i as f64 / sample_rate;
-
-            // Gate management.
-            for &(freq, on, off) in notes {
-                if (t - on).abs() < 1.0 / sample_rate {
-                    osc.set_frequency(freq);
-                    amp_env.gate_on();
-                    flt_env.gate_on();
+            let t = i as f64 / SR;
+            for &(note, on, off) in notes {
+                if (t - on).abs() < 1.0 / SR {
+                    engine.note_on(note, 100);
                 }
-                if (t - off).abs() < 1.0 / sample_rate {
-                    amp_env.gate_off();
-                    flt_env.gate_off();
+                if (t - off).abs() < 1.0 / SR {
+                    engine.note_off(note);
                 }
             }
-
-            let amp = amp_env.next_sample();
-            let flt = flt_env.next_sample();
-            let cutoff = base_cutoff + flt * cutoff_range;
-
-            filter.set_cutoff(cutoff);
-            let raw = osc.next_sample();
-            let filtered = filter.process(raw);
-            let out = (filtered * amp) * amplitude;
-
-            writer.write_sample(to_pcm(out)).unwrap();
+            writer.write_sample(to_pcm(engine.process())).unwrap();
         }
         writer.finalize().unwrap();
-        println!("Wrote gregory_adsr.wav")
+        println!("Wrote gregory_adsr.wav");
     }
 }
