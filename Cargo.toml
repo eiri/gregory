@@ -2,7 +2,7 @@
 name = "gregory"
 version = "0.1.0"
 edition = "2024"
-escription = "Monophonic software synthesizer"
+description = "Monophonic software synthesizer"
 repository = "https://github.com/eiri/gregory"
 keywords = ["audio", "synthesizer", "midi", "dsp", "music"]
 categories = ["multimedia::audio"]
@@ -19,6 +19,8 @@ path = "src/lib.rs"
 
 [dependencies]
 cpal = "0.17"
+eframe = "0.33"
+egui = "0.33"
 midir = "0.10"
 ringbuf = "0.4"
 wmidi = "4.0"

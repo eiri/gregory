@@ -1,5 +1,4 @@
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, Sample, SampleFormat, StreamConfig};
@@ -9,6 +8,7 @@ use ringbuf::{HeapCons, HeapRb};
 
 use gregory::dsp::{FilterMode, Waveform};
 use gregory::midi::{MidiInputHandle, NoteEvent};
+use gregory::ui::GregoryApp;
 use gregory::{Engine, Patch};
 
 fn main() {
@@ -31,10 +31,8 @@ fn main() {
         config.sample_format()
     );
 
-    let sample_rate = config.sample_rate() as f64;
-
-    let mut engine = Engine::new(sample_rate);
-    engine.set_patch(Patch {
+    //
+    let initial_patch = Patch {
         waveform: Waveform::Sawtooth,
         filter_mode: FilterMode::LowPass,
         filter_cutoff: 600.0,
@@ -50,7 +48,14 @@ fn main() {
         amp_release: 0.5,
         gain: 0.5,
         ..Patch::default()
-    });
+    };
+
+    let shared_patch: Arc<Mutex<Patch>> = Arc::new(Mutex::new(initial_patch.clone()));
+
+    let sample_rate = config.sample_rate() as f64;
+
+    let mut engine = Engine::new(sample_rate);
+    engine.set_patch(initial_patch);
 
     // Wrap engine in Arc<Mutex> so it can be shared between the audio
     // callback thread and the main thread
@@ -80,33 +85,56 @@ fn main() {
         }
     };
 
-    let stream = build_stream(&device, &config.into(), Arc::clone(&engine), consumer)
-        .expect("Failed to build audio stream");
+    let _stream = build_stream(
+        &device,
+        &config.into(),
+        Arc::clone(&engine),
+        Arc::clone(&shared_patch),
+        consumer,
+    )
+    .expect("Failed to build audio stream");
 
-    stream.play().expect("Failed to start audio stream");
+    _stream.play().expect("Failed to start audio stream");
 
-    println!("Press Ctrl+C to quit");
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("Gregory")
+            .with_inner_size([950.0, 370.0])
+            .with_resizable(false),
+        ..Default::default()
+    };
 
-    // Park the main thread — audio and MIDI run on their own threads.
-    loop {
-        std::thread::sleep(Duration::from_secs(1));
-    }
+    eframe::run_native(
+        "Gregory",
+        options,
+        Box::new(move |cc| Ok(Box::new(GregoryApp::new(Arc::clone(&shared_patch), cc)))),
+    )
+    .expect("Failed to start UI");
 }
 
 fn build_stream(
     device: &Device,
     config: &StreamConfig,
     engine: Arc<Mutex<Engine>>,
+    shared_patch: Arc<Mutex<Patch>>,
     consumer: HeapCons<NoteEvent>,
 ) -> Result<cpal::Stream, cpal::BuildStreamError> {
     let channels = config.channels as usize;
     let sample_format = device.default_output_config().unwrap().sample_format();
 
     match sample_format {
-        SampleFormat::F32 => build_stream_typed::<f32>(device, config, engine, consumer, channels),
-        SampleFormat::F64 => build_stream_typed::<f64>(device, config, engine, consumer, channels),
-        SampleFormat::I16 => build_stream_typed::<i16>(device, config, engine, consumer, channels),
-        SampleFormat::U16 => build_stream_typed::<u16>(device, config, engine, consumer, channels),
+        SampleFormat::F32 => {
+            build_stream_typed::<f32>(device, config, engine, shared_patch, consumer, channels)
+        }
+        SampleFormat::F64 => {
+            build_stream_typed::<f64>(device, config, engine, shared_patch, consumer, channels)
+        }
+        SampleFormat::I16 => {
+            build_stream_typed::<i16>(device, config, engine, shared_patch, consumer, channels)
+        }
+        SampleFormat::U16 => {
+            build_stream_typed::<u16>(device, config, engine, shared_patch, consumer, channels)
+        }
         _ => panic!("Unsupported sample format: {sample_format}"),
     }
 }
@@ -115,12 +143,16 @@ fn build_stream_typed<T>(
     device: &Device,
     config: &StreamConfig,
     engine: Arc<Mutex<Engine>>,
+    shared_patch: Arc<Mutex<Patch>>,
     mut consumer: HeapCons<NoteEvent>,
     channels: usize,
 ) -> Result<cpal::Stream, cpal::BuildStreamError>
 where
     T: Sample + FromSample<f32> + cpal::SizedSample,
 {
+    // Declared here so it's captured by the move closure below.
+    let mut last_patch: Option<Patch> = None;
+
     device.build_output_stream(
         config,
         move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
@@ -129,6 +161,15 @@ where
                 Ok(e) => e,
                 Err(_) => return, // skip buffer if contended
             };
+
+            // Apply patch changes from the UI thread — once per buffer, not per sample.
+            if let Ok(p) = shared_patch.try_lock() {
+                let changed = last_patch.as_ref().is_none_or(|lp| lp != &*p);
+                if changed {
+                    eng.set_patch(p.clone());
+                    last_patch = Some(p.clone());
+                }
+            }
 
             // Drain all pending MIDI events before processing audio.
             while let Some(event) = consumer.try_pop() {
@@ -140,7 +181,14 @@ where
                         eng.note_off(note);
                     }
                     NoteEvent::PitchBend { semitones } => eng.pitch_bend(semitones),
-                    NoteEvent::ModWheel { value } => eng.set_mod_wheel(value),
+                    NoteEvent::ModWheel { value } => {
+                        eng.set_mod_wheel(value);
+                        if let Ok(mut p) = shared_patch.try_lock() {
+                            p.mod_wheel = value;
+                            // this kind of spills over, but that's ok for now
+                            p.filter_cutoff = 10.0 + value * (18000.0 - 10.0);
+                        }
+                    }
                 }
             }
 
