@@ -13,3 +13,6 @@ path = "src/bin/gregory.rs"
 
 [dependencies]
 cpal = "0.17"
+midir = "0.10"
+ringbuf = "0.4"
+wmidi = "4.0"

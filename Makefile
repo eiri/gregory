@@ -5,7 +5,7 @@ all: run
 
 .PHONY: run
 run:
-	cargo run --bin gregory
+	cargo run --bin gregory -- "KeyStep Pro"
 
 .PHONY: check
 check:
