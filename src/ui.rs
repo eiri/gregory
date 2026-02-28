@@ -9,7 +9,7 @@ use egui::{
 use crate::Patch;
 use crate::dsp::{FilterMode, Waveform};
 
-//  Colour palette                                                      //
+//  Colour palette
 const BG: Color32 = Color32::from_rgb(230, 225, 245); // light lavender
 const PANEL_BG: Color32 = Color32::from_rgb(215, 208, 235); // slightly darker lavender
 const ACCENT: Color32 = Color32::from_rgb(75, 55, 120); // dark lavender
@@ -52,7 +52,6 @@ impl eframe::App for GregoryApp {
         }
 
         if let Ok(p) = self.patch.try_lock() {
-            self.local.mod_wheel = p.mod_wheel;
             self.local.filter_cutoff = p.filter_cutoff;
         }
 
@@ -214,7 +213,6 @@ fn filter_section(ui: &mut Ui, patch: &mut Patch) {
 
     if cutoff_norm != cutoff_before {
         patch.filter_cutoff = 10.0 + cutoff_norm * (18000.0 - 10.0);
-        patch.mod_wheel = (patch.filter_cutoff - 10.0) / (18000.0 - 10.0);
     }
     if res_norm != res_before {
         patch.filter_resonance = res_norm;
@@ -455,7 +453,6 @@ fn patch_changed(a: &Patch, b: &Patch) -> bool {
         || a.filter_cutoff != b.filter_cutoff
         || a.filter_resonance != b.filter_resonance
         || a.flt_env_amount != b.flt_env_amount
-        || a.mod_wheel != b.mod_wheel
         || a.amp_attack != b.amp_attack
         || a.amp_decay != b.amp_decay
         || a.amp_sustain != b.amp_sustain

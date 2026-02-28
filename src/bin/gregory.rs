@@ -212,7 +212,6 @@ where
                     NoteEvent::ModWheel { value } => {
                         eng.set_mod_wheel(value);
                         if let Ok(mut p) = shared_patch.try_lock() {
-                            p.mod_wheel = value;
                             // this kind of spills over, but that's ok for now
                             p.filter_cutoff = 10.0 + value * (18000.0 - 10.0);
                         }

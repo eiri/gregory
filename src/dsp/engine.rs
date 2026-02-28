@@ -31,8 +31,6 @@ pub struct Patch {
     pub flt_release: f64,
     /// How far the filter envelope opens the cutoff above the base, in Hz.
     pub flt_env_amount: f64,
-    // current position of the mod wheel 0.0–1.0, driven by keyboard or UI.
-    pub mod_wheel: f64,
     /// Master output gain, 0.0–1.0.
     pub gain: f64,
 }
@@ -54,7 +52,6 @@ impl Default for Patch {
             flt_sustain: 0.1,
             flt_release: 0.3,
             flt_env_amount: 4000.0,
-            mod_wheel: 0.0,
             gain: 0.5,
         }
     }
@@ -78,6 +75,7 @@ pub struct Engine {
     /// The MIDI note currently sounding, if any.
     current_note: Option<u8>,
     pitch_bend_semitones: f64,
+    mod_wheel: f64,
 }
 
 impl Engine {
@@ -115,6 +113,7 @@ impl Engine {
             sample_rate,
             current_note: None,
             pitch_bend_semitones: 0.0,
+            mod_wheel: 0.0,
         }
     }
 
@@ -144,8 +143,8 @@ impl Engine {
     }
 
     pub fn set_mod_wheel(&mut self, value: f64) {
-        self.patch.mod_wheel = value.clamp(0.0, 1.0);
-        self.patch.filter_cutoff = 10.0 + self.patch.mod_wheel * (18000.0 - 10.0);
+        self.mod_wheel = value.clamp(0.0, 1.0);
+        self.patch.filter_cutoff = 10.0 + self.mod_wheel * (18000.0 - 10.0);
     }
 
     /// Hard-reset oscillator phase to zero. Call before `note_on` for a staccato.
@@ -198,7 +197,7 @@ impl Engine {
         let flt = self.flt_env.next_sample();
 
         // Map mod wheel [0.0, 1.0] to cutoff range [10, 18000] Hz.
-        let base_cutoff = 10.0 + self.patch.mod_wheel * (18000.0 - 10.0);
+        let base_cutoff = 10.0 + self.mod_wheel * (18000.0 - 10.0);
         let cutoff =
             (base_cutoff + flt * self.patch.flt_env_amount).clamp(10.0, self.sample_rate * 0.49);
         self.filter.set_cutoff(cutoff);
