@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use clap::Parser;
@@ -23,6 +24,14 @@ struct Cli {
 
 fn main() {
     let cli = Cli::parse();
+
+    let running = Arc::new(AtomicBool::new(true));
+    let running_ctrlc = Arc::clone(&running);
+
+    ctrlc::set_handler(move || {
+        running_ctrlc.store(false, Ordering::SeqCst);
+    })
+    .expect("Failed to set Ctrl+C handler");
 
     let host = cpal::default_host();
 
@@ -116,10 +125,17 @@ fn main() {
         ..Default::default()
     };
 
+    let running_ui = Arc::clone(&running);
     eframe::run_native(
         "Gregory",
         options,
-        Box::new(move |cc| Ok(Box::new(GregoryApp::new(Arc::clone(&shared_patch), cc)))),
+        Box::new(move |cc| {
+            Ok(Box::new(GregoryApp::new(
+                Arc::clone(&shared_patch),
+                Arc::clone(&running_ui),
+                cc,
+            )))
+        }),
     )
     .expect("Failed to start UI");
 }

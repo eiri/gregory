@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use egui::{
@@ -20,19 +21,36 @@ pub struct GregoryApp {
     patch: Arc<Mutex<Patch>>,
     /// Local copy we mutate in the UI, it's written back to the mutex on change.
     local: Patch,
+    running: Arc<AtomicBool>,
 }
 
 impl GregoryApp {
-    pub fn new(patch: Arc<Mutex<Patch>>, cc: &eframe::CreationContext) -> Self {
+    pub fn new(
+        patch: Arc<Mutex<Patch>>,
+        running: Arc<AtomicBool>,
+        cc: &eframe::CreationContext,
+    ) -> Self {
         setup_fonts(&cc.egui_ctx);
         setup_visuals(&cc.egui_ctx);
         let local = patch.lock().unwrap().clone();
-        Self { patch, local }
+        Self {
+            patch,
+            local,
+            running,
+        }
     }
 }
 
 impl eframe::App for GregoryApp {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if !self.running.load(Ordering::SeqCst) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+
         if let Ok(p) = self.patch.try_lock() {
             self.local.mod_wheel = p.mod_wheel;
             self.local.filter_cutoff = p.filter_cutoff;
