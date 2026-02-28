@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use clap::Parser;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, Sample, SampleFormat, StreamConfig};
 use ringbuf::traits::Consumer;
@@ -11,7 +12,18 @@ use gregory::midi::{MidiInputHandle, NoteEvent};
 use gregory::ui::GregoryApp;
 use gregory::{Engine, Patch};
 
+#[derive(Parser)]
+#[command(name = "gregory", about = "Monophonic software synthesizer")]
+struct Cli {
+    /// MIDI input port name or substring to match (e.g. "KeyStep", "USB").
+    /// Connects to the first available port if omitted.
+    #[arg(short, long, default_value = "")]
+    midi: String,
+}
+
 fn main() {
+    let cli = Cli::parse();
+
     let host = cpal::default_host();
 
     let device = host
@@ -72,7 +84,7 @@ fn main() {
         println!("  [{i}] {name}");
     }
 
-    let port_hint = std::env::args().nth(1).unwrap_or_default();
+    let port_hint = cli.midi;
 
     let _midi = match MidiInputHandle::connect(&port_hint, producer) {
         Ok(handle) => {
