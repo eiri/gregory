@@ -25,4 +25,6 @@ eframe = "0.33"
 egui = "0.33"
 midir = "0.10"
 ringbuf = "0.4"
+serde = { version = "1", features = ["derive"] }
+toml = "1.0"
 wmidi = "4.0"

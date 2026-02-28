@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::dsp::{Envelope, Filter, FilterMode, Oscillator, Waveform};
 
 /// Convert a MIDI note number to frequency in Hz.
@@ -7,7 +9,7 @@ pub fn midi_note_to_freq(note: u8) -> f64 {
 }
 
 /// All user-facing parameters in one flat struct.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Patch {
     // Oscillator
     pub waveform: Waveform,
