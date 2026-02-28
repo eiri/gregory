@@ -28,6 +28,23 @@ The implementation is intentionally kept simple.
 
 ## Usage
 
+Run in terminal
+
+```bash
+$ gregory
+Output device: MiniFuse 4
+Sample rate: 48000  Channels: 6  Format: F32
+Available MIDI ports:
+  [0] KeyStep Pro
+  [1] MiniFuse 4
+MIDI input: KeyStep Pro
+MIDI connected
+```
+
+![Gregory UI](ui.png)
+
+Tweak the knobs and faders.
+
 ## Installation
 
 Prebuilt binaries for macOS, Linux and Windows are available on the
