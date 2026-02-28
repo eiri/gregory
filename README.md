@@ -10,25 +10,11 @@ filter, and a dual ADSR envelope for amplitude and filter modulation. It
 accepts input from any connected MIDI keyboard and runs on macOS, Linux and
 Windows via native audio APIs.
 
-### Motivation
-
-This is an educational project with two goals.
-
-First, to explore writing audio software in Rust with a look at options
-for lock-free concurrency between audio and MIDI threads.
-
-Second, to learn software sound synthesis practically by writing
-from the ground up oscillators, filters and envelopes.
-
-The implementation is intentionally kept simple.
-
-### Name
-
-**Gregory** is named after Gregorian chant, since it's monophonic, one voice at a time.
-
 ## Usage
 
-Run in terminal
+![Gregory UI](ui.png)
+
+Run in terminal:
 
 ```bash
 $ gregory
@@ -41,9 +27,7 @@ MIDI input: KeyStep Pro
 MIDI connected
 ```
 
-![Gregory UI](ui.png)
-
-Tweak the knobs and faders.
+Then tweak the knobs and faders.
 
 ## Installation
 
@@ -55,6 +39,22 @@ To build and install from source with Cargo:
 ```bash
 cargo install --git https://github.com/eiri/gregory
 ```
+
+### Motivation
+
+This is an educational project with two goals.
+
+First, to explore writing audio software in Rust with a look at options
+for lock-free concurrency between audio and MIDI threads.
+
+Second, to learn software sound synthesis practically by writing
+from the ground up oscillators, filters and envelopes.
+
+The implementation is intentionally kept simple.
+
+#### Name
+
+**Gregory** is named after Gregorian chant, since it's monophonic, one voice at a time.
 
 ## License
 
