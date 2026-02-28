@@ -99,7 +99,7 @@ fn main() {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Gregory")
-            .with_inner_size([950.0, 370.0])
+            .with_inner_size([936.0, 290.0])
             .with_resizable(false),
         ..Default::default()
     };

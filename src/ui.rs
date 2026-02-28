@@ -70,20 +70,20 @@ impl eframe::App for GregoryApp {
 
                 // Main panel row
                 ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
-                    ui.add_space(12.0);
-                    section(ui, "OSCILLATOR", |ui| {
+                    ui.add_space(20.0);
+                    section(ui, "OSCILLATOR", None, |ui| {
                         osc_section(ui, &mut self.local);
                     });
-                    section(ui, "FILTER ENV", |ui| {
+                    section(ui, "FILTER ENV", None, |ui| {
                         flt_env_section(ui, &mut self.local);
                     });
-                    section(ui, "FILTER", |ui| {
+                    section(ui, "FILTER", Some(180.0), |ui| {
                         filter_section(ui, &mut self.local);
                     });
-                    section(ui, "AMP ENV", |ui| {
+                    section(ui, "AMP ENV", None, |ui| {
                         amp_env_section(ui, &mut self.local);
                     });
-                    section(ui, "GAIN", |ui| {
+                    section(ui, "GAIN", Some(0.0), |ui| {
                         gain_section(ui, &mut self.local);
                     });
                 });
@@ -150,77 +150,185 @@ fn filter_section(ui: &mut Ui, patch: &mut Patch) {
 
     ui.add_space(8.0);
 
-    let cutoff_before = patch.filter_cutoff;
-    knob(ui, "CUTOFF", &mut patch.filter_cutoff, 10.0..=18000.0, 0);
-    knob(ui, "RES", &mut patch.filter_resonance, 0.0..=1.0, 2);
-    knob(ui, "ENV", &mut patch.flt_env_amount, 0.0..=10000.0, 0);
+    let mut cutoff_norm = (patch.filter_cutoff - 10.0) / (18000.0 - 10.0);
+    let mut res_norm = patch.filter_resonance;
+    let mut env_norm = patch.flt_env_amount / 10000.0;
 
-    // Keep mod_wheel in sync with CUTOFF knob.
-    if patch.filter_cutoff != cutoff_before {
+    let cutoff_before = cutoff_norm;
+    let res_before = res_norm;
+    let env_before = env_norm;
+
+    let col_width = 56.0;
+    let knob_size = 44.0;
+
+    ui.horizontal(|ui| {
+        for (label, norm, display) in [
+            (
+                "CUTOFF",
+                &mut cutoff_norm,
+                format!("{:.0}", patch.filter_cutoff),
+            ),
+            (
+                "RES",
+                &mut res_norm,
+                format!("{:.2}", patch.filter_resonance),
+            ),
+            ("ENV", &mut env_norm, format!("{:.0}", patch.flt_env_amount)),
+        ] {
+            ui.vertical(|ui| {
+                ui.set_min_width(col_width);
+                ui.set_max_width(col_width);
+                ui.vertical_centered(|ui| {
+                    ui.label(dimmed(label));
+                    ui.add_space(2.0);
+                    rotary_knob(ui, norm, knob_size);
+                    ui.add_space(2.0);
+                    ui.label(
+                        RichText::new(display)
+                            .font(FontId::new(12.0, FontFamily::Proportional))
+                            .color(ACCENT),
+                    );
+                });
+            });
+            ui.add_space(4.0);
+        }
+    });
+
+    if cutoff_norm != cutoff_before {
+        patch.filter_cutoff = 10.0 + cutoff_norm * (18000.0 - 10.0);
         patch.mod_wheel = (patch.filter_cutoff - 10.0) / (18000.0 - 10.0);
+    }
+    if res_norm != res_before {
+        patch.filter_resonance = res_norm;
+    }
+    if env_norm != env_before {
+        patch.flt_env_amount = env_norm * 10000.0;
     }
 }
 
 fn amp_env_section(ui: &mut Ui, patch: &mut Patch) {
-    knob(ui, "ATK", &mut patch.amp_attack, 0.001..=4.0, 3);
-    knob(ui, "DEC", &mut patch.amp_decay, 0.001..=4.0, 3);
-    knob(ui, "SUS", &mut patch.amp_sustain, 0.0..=1.0, 2);
-    knob(ui, "REL", &mut patch.amp_release, 0.001..=4.0, 3);
+    ui.horizontal(|ui| {
+        fader(ui, "A", &mut patch.amp_attack, 0.001..=4.0, 3);
+        fader(ui, "D", &mut patch.amp_decay, 0.001..=4.0, 3);
+        fader(ui, "S", &mut patch.amp_sustain, 0.0..=1.0, 2);
+        fader(ui, "R", &mut patch.amp_release, 0.001..=4.0, 3);
+    });
 }
 
 fn flt_env_section(ui: &mut Ui, patch: &mut Patch) {
-    knob(ui, "ATK", &mut patch.flt_attack, 0.001..=4.0, 3);
-    knob(ui, "DEC", &mut patch.flt_decay, 0.001..=4.0, 3);
-    knob(ui, "SUS", &mut patch.flt_sustain, 0.0..=1.0, 2);
-    knob(ui, "REL", &mut patch.flt_release, 0.001..=4.0, 3);
+    ui.horizontal(|ui| {
+        fader(ui, "A", &mut patch.flt_attack, 0.001..=4.0, 3);
+        fader(ui, "D", &mut patch.flt_decay, 0.001..=4.0, 3);
+        fader(ui, "S", &mut patch.flt_sustain, 0.0..=1.0, 2);
+        fader(ui, "R", &mut patch.flt_release, 0.001..=4.0, 3);
+    });
 }
 
 fn gain_section(ui: &mut Ui, patch: &mut Patch) {
-    knob(ui, "GAIN", &mut patch.gain, 0.0..=1.0, 2);
+    rotary_knob(ui, &mut patch.gain, 40.0);
 }
 
-//  Widgets                                                             //
+//  Widgets
 
-fn knob(
+fn rotary_knob(ui: &mut Ui, value: &mut f64, size: f32) {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), egui::Sense::click_and_drag());
+
+    if response.dragged() {
+        let delta = -response.drag_delta().y / 100.0;
+        *value = (*value + delta as f64).clamp(0.0, 1.0);
+    }
+
+    let painter = ui.painter();
+    let center = rect.center();
+    let radius = size / 2.0 - 4.0;
+
+    // Background circle
+    painter.circle_filled(center, radius, PANEL_BG);
+    painter.circle_stroke(center, radius, Stroke::new(1.5, ACCENT_DIM));
+
+    // Arc showing value — 270° total sweep, starting at bottom-left
+    let start_angle = std::f32::consts::PI * 0.75;
+    let end_angle = start_angle + std::f32::consts::PI * 1.5 * *value as f32;
+    let arc_radius = radius - 3.0;
+    let steps = 32;
+    let points: Vec<egui::Pos2> = (0..=steps)
+        .map(|i| {
+            let t = i as f32 / steps as f32;
+            let angle = start_angle + t * (end_angle - start_angle);
+            egui::Pos2::new(
+                center.x + arc_radius * angle.cos(),
+                center.y + arc_radius * angle.sin(),
+            )
+        })
+        .collect();
+    painter.add(egui::Shape::line(points, Stroke::new(2.0, ACCENT)));
+
+    // Indicator dot at current value position
+    let indicator_angle = start_angle + std::f32::consts::PI * 1.5 * *value as f32;
+    let dot_pos = egui::Pos2::new(
+        center.x + arc_radius * indicator_angle.cos(),
+        center.y + arc_radius * indicator_angle.sin(),
+    );
+    painter.circle_filled(dot_pos, 3.0, ACCENT);
+}
+
+fn fader(
     ui: &mut Ui,
     label: &str,
     value: &mut f64,
     range: std::ops::RangeInclusive<f64>,
     decimals: usize,
 ) {
-    ui.vertical(|ui| {
-        ui.set_min_width(120.0);
-        ui.label(dimmed(label));
-        ui.add_space(2.0);
+    let col_width = 40.0;
+    let slider_height = 120.0;
 
-        ui.horizontal(|ui| {
+    ui.vertical(|ui| {
+        ui.set_min_width(col_width);
+        ui.set_max_width(col_width);
+
+        // Value at top, centered
+        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+            ui.set_min_size(Vec2::new(col_width, 20.0));
+            ui.set_max_size(Vec2::new(col_width, 20.0));
+            ui.label(
+                RichText::new(format!("{:.prec$}", value, prec = decimals))
+                    .font(FontId::new(12.0, FontFamily::Proportional))
+                    .color(ACCENT),
+            );
+        });
+
+        // Vertical slider, centered
+        ui.with_layout(Layout::top_down(Align::Center), |ui| {
             ui.scope(|ui| {
-                ui.spacing_mut().slider_width = 100.0;
                 ui.spacing_mut().slider_rail_height = 3.0;
                 ui.spacing_mut().interact_size = Vec2::new(4.0, 4.0);
                 ui.visuals_mut().selection.bg_fill = ACCENT;
                 ui.visuals_mut().widgets.active.bg_fill = ACCENT_DIM;
                 ui.visuals_mut().widgets.inactive.fg_stroke = Stroke::new(1.0, ACCENT);
                 ui.visuals_mut().widgets.hovered.fg_stroke = Stroke::new(1.0, ACCENT);
-                ui.add(
-                    Slider::new(value, range)
-                        .show_value(false)
-                        .handle_shape(HandleShape::Circle)
-                        .trailing_fill(true),
-                );
-            });
 
-            ui.add_sized(
-                Vec2::new(52.0, 14.0),
-                egui::Label::new(
-                    RichText::new(format!("{:.prec$}", value, prec = decimals))
-                        .font(FontId::new(14.0, FontFamily::Proportional))
-                        .color(ACCENT),
-                ),
-            );
+                let slider_width = 20.0;
+                let padding = (col_width - slider_width) / 2.0;
+                ui.horizontal(|ui| {
+                    ui.add_space(padding);
+                    ui.add_sized(
+                        Vec2::new(slider_width, slider_height),
+                        Slider::new(value, range)
+                            .vertical()
+                            .show_value(false)
+                            .handle_shape(HandleShape::Circle)
+                            .trailing_fill(true),
+                    );
+                });
+            });
         });
 
-        ui.add_space(4.0);
+        // Label at bottom, centered
+        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+            ui.set_min_size(Vec2::new(col_width, 20.0));
+            ui.set_max_size(Vec2::new(col_width, 20.0));
+            ui.label(dimmed(label));
+        });
     });
 }
 
@@ -250,14 +358,14 @@ fn dimmed(text: &str) -> RichText {
         .color(TEXT_DIM)
 }
 
-fn section(ui: &mut Ui, title: &str, content: impl FnOnce(&mut Ui)) {
+fn section(ui: &mut Ui, title: &str, min_width: Option<f32>, content: impl FnOnce(&mut Ui)) {
     Frame::new()
         .fill(PANEL_BG)
         .corner_radius(CornerRadius::same(6))
         .inner_margin(Vec2::new(12.0, 10.0))
         .stroke(Stroke::new(1.0, ACCENT_DIM))
         .show(ui, |ui| {
-            ui.set_min_width(90.0);
+            ui.set_min_width(min_width.unwrap_or(90.0));
             ui.vertical(|ui| {
                 ui.label(
                     RichText::new(title)
