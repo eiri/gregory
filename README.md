@@ -2,6 +2,8 @@
 
 Monophonic software synthesizer
 
+![Gregory UI](ui.png)
+
 ## Summary
 
 Gregory is a one-oscillator subtractive monosynth written in Rust. It has a
@@ -11,8 +13,6 @@ accepts input from any connected MIDI keyboard and runs on macOS, Linux and
 Windows via native audio APIs.
 
 ## Usage
-
-![Gregory UI](ui.png)
 
 Run in terminal:
 
@@ -27,7 +27,9 @@ MIDI input: KeyStep Pro
 MIDI connected
 ```
 
-Then tweak the knobs and faders.
+Then tweak the knobs and faders. Save patch with Cmd+S and load with Cmd+O.
+New patch on Cmd+N. By default patches saved in `~/.config/gregory/patches`
+as TOML files.
 
 ## Installation
 

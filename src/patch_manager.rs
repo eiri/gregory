@@ -14,9 +14,14 @@ pub fn patches_dir() -> PathBuf {
 
 pub fn save_patch(patch: &Patch, name: &str) -> Result<PathBuf, PatchError> {
     let path = patches_dir().join(format!("{}.toml", sanitize(name)));
-    let toml = toml::to_string_pretty(patch).map_err(|e| PatchError::Serialize(e.to_string()))?;
-    fs::write(&path, toml).map_err(|e| PatchError::Io(e.to_string()))?;
+    save_patch_to_path(patch, &path)?;
     Ok(path)
+}
+
+pub fn save_patch_to_path(patch: &Patch, path: &Path) -> Result<(), PatchError> {
+    let toml = toml::to_string_pretty(patch).map_err(|e| PatchError::Serialize(e.to_string()))?;
+    fs::write(path, toml).map_err(|e| PatchError::Io(e.to_string()))?;
+    Ok(())
 }
 
 pub fn load_patch(name: &str) -> Result<Patch, PatchError> {
@@ -27,26 +32,6 @@ pub fn load_patch(name: &str) -> Result<Patch, PatchError> {
 pub fn load_patch_from_path(path: &Path) -> Result<Patch, PatchError> {
     let toml = fs::read_to_string(path).map_err(|e| PatchError::Io(e.to_string()))?;
     toml::from_str(&toml).map_err(|e| PatchError::Deserialize(e.to_string()))
-}
-
-pub fn list_patches() -> Vec<String> {
-    let dir = patches_dir();
-    let Ok(entries) = fs::read_dir(&dir) else {
-        return vec![];
-    };
-    let mut names: Vec<String> = entries
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let path = e.path();
-            if path.extension()?.to_str()? == "toml" {
-                Some(path.file_stem()?.to_str()?.to_owned())
-            } else {
-                None
-            }
-        })
-        .collect();
-    names.sort();
-    names
 }
 
 pub fn delete_patch(name: &str) -> Result<(), PatchError> {
@@ -116,16 +101,6 @@ mod tests {
         let loaded = load_patch(name).expect("Failed to load patch");
         assert_eq!(patch, loaded);
         delete_patch(name).expect("Failed to delete test patch");
-    }
-
-    #[test]
-    fn test_list_patches_includes_saved() {
-        let patch = Patch::default();
-        let name = "test_patch_list";
-        save_patch(&patch, name).expect("Failed to save");
-        let names = list_patches();
-        assert!(names.contains(&name.to_owned()));
-        delete_patch(name).expect("Failed to delete");
     }
 
     #[test]

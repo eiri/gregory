@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::patch_manager;
+
 use egui::{
     Align, CentralPanel, Color32, CornerRadius, FontFamily, FontId, Frame, Layout, RichText,
     Slider, Stroke, Ui, Vec2, Widget, style::HandleShape,
@@ -22,6 +24,7 @@ pub struct GregoryApp {
     /// Local copy we mutate in the UI, it's written back to the mutex on change.
     local: Patch,
     running: Arc<AtomicBool>,
+    current_patch_name: Option<String>,
 }
 
 impl GregoryApp {
@@ -37,6 +40,7 @@ impl GregoryApp {
             patch,
             local,
             running,
+            current_patch_name: None,
         }
     }
 }
@@ -56,6 +60,70 @@ impl eframe::App for GregoryApp {
         }
 
         let before = self.local.clone();
+
+        let mut load_clicked = false;
+        let mut save_clicked = false;
+        let mut new_clicked = false;
+
+        let new_shortcut = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::N);
+        let open_shortcut = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::O);
+        let save_shortcut = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::S);
+
+        if ctx.input_mut(|i| i.consume_shortcut(&new_shortcut)) {
+            new_clicked = true;
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&open_shortcut)) {
+            load_clicked = true;
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&save_shortcut)) {
+            save_clicked = true;
+        }
+
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new("New")
+                                .shortcut_text(ctx.format_shortcut(&new_shortcut)),
+                        )
+                        .clicked()
+                    {
+                        new_clicked = true;
+                        ui.close();
+                    }
+
+                    if ui
+                        .add(
+                            egui::Button::new("Open...")
+                                .shortcut_text(ctx.format_shortcut(&open_shortcut)),
+                        )
+                        .clicked()
+                    {
+                        load_clicked = true;
+                        ui.close();
+                    }
+
+                    if ui
+                        .add(
+                            egui::Button::new("Save...")
+                                .shortcut_text(ctx.format_shortcut(&save_shortcut)),
+                        )
+                        .clicked()
+                    {
+                        save_clicked = true;
+                        ui.close();
+                    }
+
+                    ui.separator();
+
+                    if ui.button("Quit").clicked() {
+                        self.running.store(false, Ordering::SeqCst);
+                        ui.close();
+                    }
+                });
+            });
+        });
 
         CentralPanel::default()
             .frame(Frame::new().fill(BG))
@@ -81,7 +149,7 @@ impl eframe::App for GregoryApp {
                     );
                 });
 
-                ui.add_space(10.0);
+                ui.add_space(8.0);
                 ui.separator();
                 ui.add_space(10.0);
 
@@ -105,6 +173,48 @@ impl eframe::App for GregoryApp {
                     });
                 });
             });
+
+        // Act on menu actions after all UI is drawn.
+        if new_clicked {
+            self.local = Patch::default();
+            self.current_patch_name = None;
+        }
+
+        if load_clicked
+            && let Some(path) = rfd::FileDialog::new()
+                .set_title("Load Patch")
+                .add_filter("TOML", &["toml"])
+                .set_directory(patch_manager::patches_dir())
+                .pick_file()
+            && let Ok(p) = patch_manager::load_patch_from_path(&path)
+        {
+            self.local = p;
+            self.current_patch_name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_owned());
+        }
+
+        if save_clicked
+            && let Some(path) = rfd::FileDialog::new()
+                .set_title("Save Patch")
+                .add_filter("TOML", &["toml"])
+                .set_directory(patch_manager::patches_dir())
+                .set_file_name(match &self.current_patch_name {
+                    Some(n) => format!("{}.toml", n),
+                    None => "new patch.toml".to_owned(),
+                })
+                .save_file()
+        {
+            if let Err(e) = patch_manager::save_patch_to_path(&self.local, &path) {
+                eprintln!("Failed to save patch: {e}");
+            } else {
+                self.current_patch_name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_owned());
+            }
+        }
 
         // Write back only if something changed.
         if patch_changed(&before, &self.local)
