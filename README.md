@@ -6,10 +6,11 @@ Monophonic software synthesizer
 
 ## Summary
 
-Gregory is a one-oscillator subtractive monosynth written in Rust. It has a
-band-limited sawtooth and square oscillator, a four-pole Moog-style low-pass
-filter, and a dual ADSR envelope for amplitude and filter modulation. It
-accepts input from any connected MIDI keyboard and runs on macOS, Linux and
+Gregory is a one-oscillator subtractive monosynth written in Rust.
+It has a band-limited sawtooth and square oscillator with optional unison mode,
+a four-pole Moog-style low-pass filter, dual ADSR envelopes for amplitude and
+filter modulation, plus portamento for smooth pitch gliding between notes.
+It accepts input from any connected MIDI keyboard and runs on macOS, Linux and
 Windows via native audio APIs.
 
 ## Usage

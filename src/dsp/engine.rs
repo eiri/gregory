@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::dsp::{Envelope, Filter, FilterMode, Oscillator, Waveform};
+use crate::dsp::{Envelope, EnvelopeStage, Filter, FilterMode, Oscillator, Waveform};
 
 /// Convert a MIDI note number to frequency in Hz.
 /// A4 = MIDI 69 = 440 Hz.
@@ -19,6 +19,10 @@ pub struct Patch {
     // Unison
     pub unison: bool,
     pub unison_detune: f64, // detune amount in cents, 0.0–50.0
+
+    // Portamento
+    pub portamento: bool,
+    pub portamento_time: f64,
 
     // Filter
     pub filter_mode: FilterMode,
@@ -49,6 +53,8 @@ impl Default for Patch {
             pulse_width: 0.5,
             unison: false,
             unison_detune: 0.0,
+            portamento: false,
+            portamento_time: 0.1,
             filter_mode: FilterMode::LowPass,
             filter_cutoff: 10.0,
             filter_resonance: 0.3,
@@ -87,6 +93,8 @@ impl Patch {
             pulse_width,
             unison: fastrand::bool(),
             unison_detune: if fastrand::bool() { r(5.0, 30.0) } else { 0.0 },
+            portamento: fastrand::bool(),
+            portamento_time: r(0.05, 0.5),
             filter_mode,
             filter_cutoff: r(200.0, 8000.0),
             filter_resonance: r(0.0, 0.7),
@@ -125,6 +133,8 @@ pub struct Engine {
     current_note: Option<u8>,
     pitch_bend_semitones: f64,
     mod_wheel: f64,
+    current_freq: f64,
+    target_freq: f64,
 }
 
 impl Engine {
@@ -168,16 +178,18 @@ impl Engine {
             current_note: None,
             pitch_bend_semitones: 0.0,
             mod_wheel: 0.0,
+            current_freq: 440.0,
+            target_freq: 440.0,
         }
     }
 
     /// Start a note. Frequency is derived from the MIDI note number.
     pub fn note_on(&mut self, note: u8, _velocity: u8) {
         self.current_note = Some(note);
-        let freq = midi_note_to_freq(note);
-        self.osc.set_frequency(freq);
-        self.osc2.set_frequency(freq);
-        self.osc3.set_frequency(freq);
+        self.target_freq = midi_note_to_freq(note);
+        if !self.patch.portamento || self.amp_env.stage() == EnvelopeStage::Idle {
+            self.current_freq = self.target_freq;
+        }
         self.amp_env.gate_on();
         self.flt_env.gate_on();
     }
@@ -209,11 +221,7 @@ impl Engine {
 
     /// Returns true if the engine is producing non-silent output
     pub fn is_active(&self) -> bool {
-        self.current_note.is_some()
-            || !matches!(
-                self.amp_env.stage(),
-                crate::dsp::envelope::EnvelopeStage::Idle
-            )
+        self.current_note.is_some() || !matches!(self.amp_env.stage(), EnvelopeStage::Idle)
     }
 
     pub fn set_patch(&mut self, p: Patch) {
@@ -242,19 +250,25 @@ impl Engine {
     }
 
     /// Produce one output sample. Call this once per sample on the audio thread.
-    ///
-    /// Signal flow: oscillator -> filter (cutoff modulated by flt_env) -> * amp_env -> * gain
     pub fn process(&mut self) -> f64 {
-        // Apply pitch bend — recompute frequency from base note + bend offset.
         if let Some(note) = self.current_note {
-            let bent_freq =
+            let bent_target =
                 midi_note_to_freq(note) * 2.0_f64.powf(self.pitch_bend_semitones / 12.0);
-            self.osc.set_frequency(bent_freq);
+            self.target_freq = bent_target;
 
+            if self.patch.portamento {
+                let coeff = (-8.0_f64.ln() / (self.patch.portamento_time * self.sample_rate)).exp();
+                self.current_freq =
+                    self.target_freq + (self.current_freq - self.target_freq) * coeff;
+            } else {
+                self.current_freq = self.target_freq;
+            }
+
+            self.osc.set_frequency(self.current_freq);
             if self.patch.unison {
-                let detune = 2.0_f64.powf(self.patch.unison_detune / 1200.0); // cents to ratio
-                self.osc2.set_frequency(bent_freq * detune);
-                self.osc3.set_frequency(bent_freq / detune);
+                let detune = 2.0_f64.powf(self.patch.unison_detune / 1200.0);
+                self.osc2.set_frequency(self.current_freq * detune);
+                self.osc3.set_frequency(self.current_freq / detune);
             }
         }
 

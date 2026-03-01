@@ -229,8 +229,8 @@ impl eframe::App for GregoryApp {
                     section(ui, "OSCILLATOR", None, |ui| {
                         osc_section(ui, &mut self.local);
                     });
-                    section(ui, "UNISON", None, |ui| {
-                        unison_section(ui, &mut self.local);
+                    section(ui, "OSC MOD", None, |ui| {
+                        osc_mod_section(ui, &mut self.local);
                     });
                     section(ui, "FILTER ENV", None, |ui| {
                         flt_env_section(ui, &mut self.local);
@@ -334,36 +334,68 @@ fn osc_section(ui: &mut Ui, patch: &mut Patch) {
     });
 }
 
-fn unison_section(ui: &mut Ui, patch: &mut Patch) {
-    if toggle_button(ui, "ON", patch.unison).clicked() {
-        patch.unison = !patch.unison;
-    }
+fn osc_mod_section(ui: &mut Ui, patch: &mut Patch) {
+    ui.horizontal(|ui| {
+        if toggle_button(ui, "UNISON", patch.unison).clicked() {
+            patch.unison = !patch.unison;
+        }
+        if toggle_button(ui, "PORTA", patch.portamento).clicked() {
+            patch.portamento = !patch.portamento;
+        }
+    });
 
     ui.add_space(8.0);
 
     let col_width = 56.0;
     let knob_size = 44.0;
+
     let mut det_norm = patch.unison_detune / 50.0;
     let det_before = det_norm;
-    ui.add_enabled_ui(patch.unison, |ui| {
-        ui.vertical(|ui| {
-            ui.set_min_width(col_width);
-            ui.set_max_width(col_width);
-            ui.vertical_centered(|ui| {
-                ui.label(dimmed("DET"));
-                ui.add_space(2.0);
-                rotary_knob(ui, &mut det_norm, knob_size);
-                ui.add_space(2.0);
-                ui.label(
-                    RichText::new(format!("{:.1}", patch.unison_detune))
-                        .font(FontId::new(12.0, FontFamily::Proportional))
-                        .color(ACCENT),
-                );
+    let mut porta_norm = patch.portamento_time / 2.0;
+    let porta_before = porta_norm;
+
+    ui.horizontal(|ui| {
+        ui.add_enabled_ui(patch.unison, |ui| {
+            ui.vertical(|ui| {
+                ui.set_min_width(col_width);
+                ui.set_max_width(col_width);
+                ui.vertical_centered(|ui| {
+                    ui.label(dimmed("DET"));
+                    ui.add_space(2.0);
+                    rotary_knob(ui, &mut det_norm, knob_size);
+                    ui.add_space(2.0);
+                    ui.label(
+                        RichText::new(format!("{:.1}", patch.unison_detune))
+                            .font(FontId::new(12.0, FontFamily::Proportional))
+                            .color(ACCENT),
+                    );
+                });
+            });
+        });
+        ui.add_enabled_ui(patch.portamento, |ui| {
+            ui.vertical(|ui| {
+                ui.set_min_width(col_width);
+                ui.set_max_width(col_width);
+                ui.vertical_centered(|ui| {
+                    ui.label(dimmed("TIME"));
+                    ui.add_space(2.0);
+                    rotary_knob(ui, &mut porta_norm, knob_size);
+                    ui.add_space(2.0);
+                    ui.label(
+                        RichText::new(format!("{:.2}", patch.portamento_time))
+                            .font(FontId::new(12.0, FontFamily::Proportional))
+                            .color(ACCENT),
+                    );
+                });
             });
         });
     });
+
     if det_norm != det_before {
         patch.unison_detune = det_norm * 50.0;
+    }
+    if porta_norm != porta_before {
+        patch.portamento_time = porta_norm * 2.0;
     }
 }
 
@@ -716,4 +748,6 @@ fn patch_changed(a: &Patch, b: &Patch) -> bool {
         || a.gain != b.gain
         || a.unison != b.unison
         || a.unison_detune != b.unison_detune
+        || a.portamento != b.portamento
+        || a.portamento_time != b.portamento_time
 }
