@@ -207,6 +207,16 @@ impl eframe::App for GregoryApp {
                             .font(FontId::new(14.0, FontFamily::Proportional))
                             .color(TEXT_DIM),
                     );
+
+                    let available = ui.available_width() - 32.0;
+                    ui.add_space(available);
+
+                    if dice_button(ui).clicked() {
+                        self.local = Patch::random();
+                        self.current_patch_name = None;
+                    }
+
+                    ui.add_space(16.0);
                 });
 
                 ui.add_space(8.0);
@@ -567,6 +577,42 @@ fn section(ui: &mut Ui, title: &str, min_width: Option<f32>, content: impl FnOnc
         });
 
     ui.add_space(8.0);
+}
+
+fn dice_button(ui: &mut Ui) -> egui::Response {
+    let size = Vec2::new(16.0, 16.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+
+    let painter = ui.painter();
+    let center = rect.center();
+    let r = 2.0; // corner radius
+
+    let bg = if response.hovered() { ACCENT } else { PANEL_BG };
+    let fg = if response.hovered() { BG } else { ACCENT };
+
+    painter.rect(
+        rect,
+        CornerRadius::same(r as u8),
+        bg,
+        Stroke::new(1.0, ACCENT_DIM),
+        egui::StrokeKind::Outside,
+    );
+
+    // Five dots in a dice-5 pattern
+    let dot_r = 1.5;
+    let pad = 4.0;
+    let dots = [
+        egui::Pos2::new(rect.min.x + pad, rect.min.y + pad), // top-left
+        egui::Pos2::new(rect.max.x - pad, rect.min.y + pad), // top-right
+        egui::Pos2::new(center.x, center.y),                 // center
+        egui::Pos2::new(rect.min.x + pad, rect.max.y - pad), // bottom-left
+        egui::Pos2::new(rect.max.x - pad, rect.max.y - pad), // bottom-right
+    ];
+    for dot in dots {
+        painter.circle_filled(dot, dot_r, fg);
+    }
+
+    response
 }
 
 fn setup_fonts(ctx: &egui::Context) {

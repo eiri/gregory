@@ -59,6 +59,42 @@ impl Default for Patch {
     }
 }
 
+impl Patch {
+    pub fn random() -> Self {
+        let waveform = if fastrand::bool() {
+            Waveform::Sawtooth
+        } else {
+            Waveform::Square
+        };
+        let pulse_width = if fastrand::bool() { 0.25 } else { 0.5 };
+        let filter_mode = if fastrand::f64() < 0.7 {
+            FilterMode::LowPass
+        } else {
+            FilterMode::LowPass2Pole
+        };
+
+        let r = |min: f64, max: f64| min + fastrand::f64() * (max - min);
+
+        Self {
+            waveform,
+            pulse_width,
+            filter_mode,
+            filter_cutoff: r(200.0, 8000.0),
+            filter_resonance: r(0.0, 0.7),
+            flt_env_amount: r(0.0, 6000.0),
+            amp_attack: r(0.001, 0.5),
+            amp_decay: r(0.05, 1.0),
+            amp_sustain: r(0.3, 1.0),
+            amp_release: r(0.05, 2.0),
+            flt_attack: r(0.001, 1.0),
+            flt_decay: r(0.05, 2.0),
+            flt_sustain: r(0.0, 0.8),
+            flt_release: r(0.05, 2.0),
+            gain: r(0.3, 0.7),
+        }
+    }
+}
+
 /// Monophonic DSP engine.
 ///
 /// Owns one oscillator, one filter, and two envelopes (amplitude + filter).
