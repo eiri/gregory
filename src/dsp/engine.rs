@@ -10,10 +10,15 @@ pub fn midi_note_to_freq(note: u8) -> f64 {
 
 /// All user-facing parameters in one flat struct.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Patch {
     // Oscillator
     pub waveform: Waveform,
     pub pulse_width: f64, // only relevant for Square, 0.0–1.0
+
+    // Unison
+    pub unison: bool,
+    pub unison_detune: f64, // detune amount in cents, 0.0–50.0
 
     // Filter
     pub filter_mode: FilterMode,
@@ -42,6 +47,8 @@ impl Default for Patch {
         Self {
             waveform: Waveform::Sawtooth,
             pulse_width: 0.5,
+            unison: false,
+            unison_detune: 0.0,
             filter_mode: FilterMode::LowPass,
             filter_cutoff: 10.0,
             filter_resonance: 0.3,
@@ -78,6 +85,8 @@ impl Patch {
         Self {
             waveform,
             pulse_width,
+            unison: fastrand::bool(),
+            unison_detune: if fastrand::bool() { r(5.0, 30.0) } else { 0.0 },
             filter_mode,
             filter_cutoff: r(200.0, 8000.0),
             filter_resonance: r(0.0, 0.7),
@@ -104,6 +113,8 @@ pub struct Engine {
     pub patch: Patch,
 
     osc: Oscillator,
+    osc2: Oscillator, // detuned up
+    osc3: Oscillator, // detuned down
     filter: Filter,
     amp_env: Envelope,
     flt_env: Envelope,
@@ -122,6 +133,9 @@ impl Engine {
 
         let mut osc = Oscillator::new(p.waveform, 440.0, sample_rate);
         osc.pulse_width = p.pulse_width;
+
+        let osc2 = osc.clone();
+        let osc3 = osc.clone();
 
         let mut filter = Filter::new(p.filter_cutoff, p.filter_resonance, sample_rate);
         filter.mode = p.filter_mode;
@@ -145,6 +159,8 @@ impl Engine {
         Self {
             patch: p,
             osc,
+            osc2,
+            osc3,
             filter,
             amp_env,
             flt_env,
@@ -158,9 +174,10 @@ impl Engine {
     /// Start a note. Frequency is derived from the MIDI note number.
     pub fn note_on(&mut self, note: u8, _velocity: u8) {
         self.current_note = Some(note);
-        self.osc.set_frequency(midi_note_to_freq(note));
-        // Maybe remove this later to allow new note to be pitched
-        self.pitch_bend_semitones = 0.0;
+        let freq = midi_note_to_freq(note);
+        self.osc.set_frequency(freq);
+        self.osc2.set_frequency(freq);
+        self.osc3.set_frequency(freq);
         self.amp_env.gate_on();
         self.flt_env.gate_on();
     }
@@ -202,6 +219,10 @@ impl Engine {
     pub fn set_patch(&mut self, p: Patch) {
         self.osc.waveform = p.waveform;
         self.osc.pulse_width = p.pulse_width;
+        self.osc2.waveform = p.waveform;
+        self.osc2.pulse_width = p.pulse_width;
+        self.osc3.waveform = p.waveform;
+        self.osc3.pulse_width = p.pulse_width;
 
         self.filter.mode = p.filter_mode;
         self.filter.set_cutoff(p.filter_cutoff);
@@ -229,6 +250,12 @@ impl Engine {
             let bent_freq =
                 midi_note_to_freq(note) * 2.0_f64.powf(self.pitch_bend_semitones / 12.0);
             self.osc.set_frequency(bent_freq);
+
+            if self.patch.unison {
+                let detune = 2.0_f64.powf(self.patch.unison_detune / 1200.0); // cents to ratio
+                self.osc2.set_frequency(bent_freq * detune);
+                self.osc3.set_frequency(bent_freq / detune);
+            }
         }
 
         let amp = self.amp_env.next_sample();
@@ -240,7 +267,11 @@ impl Engine {
             (base_cutoff + flt * self.patch.flt_env_amount).clamp(10.0, self.sample_rate * 0.49);
         self.filter.set_cutoff(cutoff);
 
-        let raw = self.osc.next_sample();
+        let raw = if self.patch.unison {
+            (self.osc.next_sample() + self.osc2.next_sample() + self.osc3.next_sample()) / 3.0
+        } else {
+            self.osc.next_sample()
+        };
         let filtered = self.filter.process(raw);
 
         filtered * amp * self.patch.gain

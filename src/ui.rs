@@ -229,6 +229,9 @@ impl eframe::App for GregoryApp {
                     section(ui, "OSCILLATOR", None, |ui| {
                         osc_section(ui, &mut self.local);
                     });
+                    section(ui, "UNISON", None, |ui| {
+                        unison_section(ui, &mut self.local);
+                    });
                     section(ui, "FILTER ENV", None, |ui| {
                         flt_env_section(ui, &mut self.local);
                     });
@@ -329,6 +332,39 @@ fn osc_section(ui: &mut Ui, patch: &mut Patch) {
             }
         });
     });
+}
+
+fn unison_section(ui: &mut Ui, patch: &mut Patch) {
+    if toggle_button(ui, "ON", patch.unison).clicked() {
+        patch.unison = !patch.unison;
+    }
+
+    ui.add_space(8.0);
+
+    let col_width = 56.0;
+    let knob_size = 44.0;
+    let mut det_norm = patch.unison_detune / 50.0;
+    let det_before = det_norm;
+    ui.add_enabled_ui(patch.unison, |ui| {
+        ui.vertical(|ui| {
+            ui.set_min_width(col_width);
+            ui.set_max_width(col_width);
+            ui.vertical_centered(|ui| {
+                ui.label(dimmed("DET"));
+                ui.add_space(2.0);
+                rotary_knob(ui, &mut det_norm, knob_size);
+                ui.add_space(2.0);
+                ui.label(
+                    RichText::new(format!("{:.1}", patch.unison_detune))
+                        .font(FontId::new(12.0, FontFamily::Proportional))
+                        .color(ACCENT),
+                );
+            });
+        });
+    });
+    if det_norm != det_before {
+        patch.unison_detune = det_norm * 50.0;
+    }
 }
 
 fn filter_section(ui: &mut Ui, patch: &mut Patch) {
@@ -678,4 +714,6 @@ fn patch_changed(a: &Patch, b: &Patch) -> bool {
         || a.flt_sustain != b.flt_sustain
         || a.flt_release != b.flt_release
         || a.gain != b.gain
+        || a.unison != b.unison
+        || a.unison_detune != b.unison_detune
 }

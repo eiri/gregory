@@ -7,6 +7,7 @@ pub enum Waveform {
 }
 
 /// A single band-limited oscillator using the PolyBLEP technique.
+#[derive(Clone)]
 pub struct Oscillator {
     pub waveform: Waveform,
     pub frequency: f64,
