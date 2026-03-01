@@ -1,10 +1,16 @@
-//! The MIDI thread receives raw bytes from `midir`, parses them with `wmidi`,
-//! and pushes `NoteEvent`s into a ring buffer that the audio thread drains.
+use std::sync::{Arc, Mutex};
 
 use midir::{MidiInput, MidiInputConnection};
 use ringbuf::HeapProd;
 use ringbuf::traits::Producer;
 use wmidi::MidiMessage;
+
+/// MIDI channel filter — Omni listens on all channels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MidiChannel {
+    Omni,
+    Channel(u8), // 1–16
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum NoteEvent {
@@ -17,6 +23,7 @@ pub enum NoteEvent {
 pub struct MidiInputHandle {
     /// Kept alive purely to maintain the connection — never read directly.
     _connection: MidiInputConnection<()>,
+    pub channel: Arc<Mutex<MidiChannel>>,
 }
 
 impl MidiInputHandle {
@@ -58,26 +65,47 @@ impl MidiInputHandle {
 
         // `producer` is moved into the callback
         let mut prod = producer;
+        let channel = Arc::new(Mutex::new(MidiChannel::Omni));
+        let channel_clone = Arc::clone(&channel);
 
         let connection = midi_in.connect(
             port,
             "gregory-input",
             move |_timestamp_us, raw, _| {
-                parse_and_push(raw, &mut prod);
+                let ch = *channel_clone.lock().unwrap();
+                parse_and_push(raw, &mut prod, ch);
             },
             (),
         )?;
 
         Ok(Self {
             _connection: connection,
+            channel,
         })
     }
 }
 
-fn parse_and_push(raw: &[u8], prod: &mut HeapProd<NoteEvent>) {
+fn parse_and_push(raw: &[u8], prod: &mut HeapProd<NoteEvent>, filter: MidiChannel) {
     let Ok(msg) = MidiMessage::try_from(raw) else {
         return;
     };
+
+    // Check channel filter before parsing the message.
+    let msg_channel = match &msg {
+        MidiMessage::NoteOn(ch, _, _) => Some(ch.index() + 1),
+        MidiMessage::NoteOff(ch, _, _) => Some(ch.index() + 1),
+        MidiMessage::PitchBendChange(ch, _) => Some(ch.index() + 1),
+        MidiMessage::ControlChange(ch, _, _) => Some(ch.index() + 1),
+        _ => None,
+    };
+
+    if let Some(ch) = msg_channel {
+        match filter {
+            MidiChannel::Omni => {}
+            MidiChannel::Channel(target) if ch == target => {}
+            _ => return, // filtered out
+        }
+    }
 
     let event = match msg {
         MidiMessage::NoteOn(_ch, note, vel) => {

@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::MidiChannel;
 use crate::patch_manager;
 
 use egui::{
@@ -25,12 +26,14 @@ pub struct GregoryApp {
     local: Patch,
     running: Arc<AtomicBool>,
     current_patch_name: Option<String>,
+    midi_channel: Option<Arc<Mutex<MidiChannel>>>,
 }
 
 impl GregoryApp {
     pub fn new(
         patch: Arc<Mutex<Patch>>,
         running: Arc<AtomicBool>,
+        midi_channel: Option<Arc<Mutex<MidiChannel>>>,
         cc: &eframe::CreationContext,
     ) -> Self {
         setup_fonts(&cc.egui_ctx);
@@ -41,6 +44,7 @@ impl GregoryApp {
             local,
             running,
             current_patch_name: None,
+            midi_channel,
         }
     }
 }
@@ -84,8 +88,11 @@ impl eframe::App for GregoryApp {
                 ui.menu_button("File", |ui| {
                     if ui
                         .add(
-                            egui::Button::new("New")
-                                .shortcut_text(ctx.format_shortcut(&new_shortcut)),
+                            egui::Button::new(
+                                RichText::new("New")
+                                    .font(FontId::new(14.0, FontFamily::Proportional)),
+                            )
+                            .shortcut_text(ctx.format_shortcut(&new_shortcut)),
                         )
                         .clicked()
                     {
@@ -95,8 +102,11 @@ impl eframe::App for GregoryApp {
 
                     if ui
                         .add(
-                            egui::Button::new("Open...")
-                                .shortcut_text(ctx.format_shortcut(&open_shortcut)),
+                            egui::Button::new(
+                                RichText::new("Open...")
+                                    .font(FontId::new(14.0, FontFamily::Proportional)),
+                            )
+                            .shortcut_text(ctx.format_shortcut(&open_shortcut)),
                         )
                         .clicked()
                     {
@@ -106,8 +116,11 @@ impl eframe::App for GregoryApp {
 
                     if ui
                         .add(
-                            egui::Button::new("Save...")
-                                .shortcut_text(ctx.format_shortcut(&save_shortcut)),
+                            egui::Button::new(
+                                RichText::new("Save...")
+                                    .font(FontId::new(14.0, FontFamily::Proportional)),
+                            )
+                            .shortcut_text(ctx.format_shortcut(&save_shortcut)),
                         )
                         .clicked()
                     {
@@ -117,9 +130,56 @@ impl eframe::App for GregoryApp {
 
                     ui.separator();
 
-                    if ui.button("Quit").clicked() {
+                    if ui
+                        .button(
+                            RichText::new("Quit").font(FontId::new(14.0, FontFamily::Proportional)),
+                        )
+                        .clicked()
+                    {
                         self.running.store(false, Ordering::SeqCst);
                         ui.close();
+                    }
+                });
+
+                ui.menu_button("MIDI", |ui| {
+                    if let Some(ch_mutex) = &self.midi_channel {
+                        let mut ch = ch_mutex.lock().unwrap();
+
+                        let omni_selected = *ch == MidiChannel::Omni;
+                        if ui
+                            .button(RichText::new("Omni").font(FontId::new(
+                                14.0,
+                                if omni_selected {
+                                    FontFamily::Name("SpecialGothicBold".into())
+                                } else {
+                                    FontFamily::Proportional
+                                },
+                            )))
+                            .clicked()
+                        {
+                            *ch = MidiChannel::Omni;
+                        }
+
+                        ui.separator();
+
+                        for n in 1u8..=16 {
+                            let selected = *ch == MidiChannel::Channel(n);
+                            if ui
+                                .button(RichText::new(format!("Channel {}", n)).font(FontId::new(
+                                    14.0,
+                                    if selected {
+                                        FontFamily::Name("SpecialGothicBold".into())
+                                    } else {
+                                        FontFamily::Proportional
+                                    },
+                                )))
+                                .clicked()
+                            {
+                                *ch = MidiChannel::Channel(n);
+                            }
+                        }
+                    } else {
+                        ui.label(dimmed("No MIDI device"));
                     }
                 });
             });

@@ -106,6 +106,8 @@ fn main() {
         }
     };
 
+    let midi_channel = _midi.as_ref().map(|h| Arc::clone(&h.channel));
+
     let _stream = build_stream(
         &device,
         &config.into(),
@@ -120,7 +122,7 @@ fn main() {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Gregory")
-            .with_inner_size([936.0, 310.0])
+            .with_inner_size([936.0, 410.0])
             .with_resizable(false),
         ..Default::default()
     };
@@ -133,6 +135,7 @@ fn main() {
             Ok(Box::new(GregoryApp::new(
                 Arc::clone(&shared_patch),
                 Arc::clone(&running_ui),
+                midi_channel,
                 cc,
             )))
         }),

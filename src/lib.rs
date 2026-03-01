@@ -5,3 +5,4 @@ pub mod ui;
 
 pub use dsp::{Engine, Patch, midi_note_to_freq};
 pub use dsp::{FilterMode, Waveform};
+pub use midi::MidiChannel;
