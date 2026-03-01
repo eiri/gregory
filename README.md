@@ -27,9 +27,9 @@ MIDI input: KeyStep Pro
 MIDI connected
 ```
 
-Then tweak the knobs and faders. Save patch with Cmd+S and load with Cmd+O.
-New patch on Cmd+N. By default patches saved in `~/.config/gregory/patches`
-as TOML files.
+Then tweak the knobs and faders or just click dice to create a random patch.
+Save patches with Cmd+S and load with Cmd+O. Create a new default patch with Cmd+N.
+By default patches saved in `~/.config/gregory/patches` as TOML files.
 
 ## Installation
 
